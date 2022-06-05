@@ -108,9 +108,9 @@ void CheckBuildable(GLuint buildable) {
 
 GbmBuffer::GbmBuffer(gbm_device* device, std::size_t width, std::size_t height)
     : width_{width}, height_{height} {
-  bo_.reset(gbm_bo_create(device, static_cast<uint32_t>(width),
-                          static_cast<uint32_t>(height), GBM_FORMAT_ABGR8888,
-                          GBM_BO_USE_LINEAR));
+  bo_.reset(gbm_bo_create(
+      device, static_cast<uint32_t>(width), static_cast<uint32_t>(height),
+      static_cast<uint32_t>(GBM_BO_FORMAT_ARGB8888), GBM_BO_USE_LINEAR));
   if (!bo_) {
     throw std::system_error(errno, std::system_category(),
                             "Failed to create gbm buffer object");
