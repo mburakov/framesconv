@@ -94,10 +94,10 @@ Options ParseCommandline(int argc, const char* const argv[]) {
 }  // namespace
 
 int main(int argc, char* argv[]) try {
-  // Parse commandline
+  // mburakov: Parse commandline.
   const auto& options = ParseCommandline(argc, argv);
 
-  // Create gbm device and buffers
+  // mburakov: Create gbm device and buffers.
   GbmDevice device(options.render_node);
   const auto& buffer_rgbx =
       device.CreateGbmBuffer(options.width, options.height);
@@ -111,17 +111,17 @@ int main(int argc, char* argv[]) try {
       device.CreateGbmBuffer(options.width, options.height);
   // device.CreateGbmBuffer(options.width / 4, options.height * 3 / 2);
 
-  // Createa and activate surfaceless egl context
+  // mburakov: Createa and activate surfaceless egl context.
   EglContext context;
   context.MakeCurrent();
   Defer deferred_reset_current([&context] { context.ResetCurrent(); });
   EGLDisplay display = context.GetDisplay();
 
-  // Create compute program
+  // mburakov: Create compute program.
   GLuint program = CreateGlProgram(kShaderSource);
   Defer deferred_gl_delete_program([program] { glDeleteProgram(program); });
 
-  // Create source image
+  // mburakov: Create source image
   EGLImage image_rgbx = buffer_rgbx.CreateEglImage(display);
   Defer deferred_egl_destroy_image_rgbx(
       [display, image_rgbx] { eglDestroyImage(display, image_rgbx); });
@@ -129,7 +129,7 @@ int main(int argc, char* argv[]) try {
   Defer deferred_gl_delete_textures_rgbx(
       [texture_rgbx] { glDeleteTextures(1, &texture_rgbx); });
 
-  // Create destination image
+  // mburakov: Create destination image.
   EGLImage image_nv12 = buffer_nv12.CreateEglImage(display);
   Defer deferred_egl_destroy_image_nv12(
       [display, image_nv12] { eglDestroyImage(display, image_nv12); });
@@ -140,7 +140,7 @@ int main(int argc, char* argv[]) try {
   using namespace std::chrono;
   auto before = steady_clock::now();
 
-  // Do the colorspace conversion
+  // mburakov: Do the colorspace conversion.
   glUseProgram(program);
   glBindImageTexture(0, texture_rgbx, 0, GL_FALSE, 0, GL_READ_ONLY, GL_RGBA8);
   glBindImageTexture(1, texture_nv12, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA8);

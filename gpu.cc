@@ -108,6 +108,8 @@ void CheckBuildable(GLuint buildable) {
 
 GbmBuffer::GbmBuffer(gbm_device* device, std::size_t width, std::size_t height)
     : width_{width}, height_{height} {
+  // mburakov: Implementation uses GBM_BO_FORMAT_ARGB8888 but the exact order
+  // does not really matter. What's important is how it's handled in the shader.
   bo_.reset(gbm_bo_create(
       device, static_cast<uint32_t>(width), static_cast<uint32_t>(height),
       static_cast<uint32_t>(GBM_BO_FORMAT_ARGB8888), GBM_BO_USE_LINEAR));
@@ -147,6 +149,8 @@ void GbmBuffer::DrainTo(std::ostream& stream) const {
 }
 
 EGLImage GbmBuffer::CreateEglImage(EGLDisplay display) const {
+  // mburakov: Implementation uses DRM_FORMAT_ARGB8888 but the exact order does
+  // not really matter. What's important is how it's handled in the shader.
   const EGLAttrib attrib_list[] = {
 #define _(...) __VA_ARGS__
       _(EGL_WIDTH, static_cast<EGLAttrib>(width_)),
