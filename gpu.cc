@@ -207,6 +207,7 @@ EglContext::EglContext() {
   }
   VerifyExtension(egl_ext, "EGL_KHR_surfaceless_context");
   VerifyExtension(egl_ext, "EGL_KHR_no_config_context");
+  VerifyExtension(egl_ext, "EGL_EXT_image_dma_buf_import");
 
   if (!eglBindAPI(EGL_OPENGL_ES_API))
     throw std::runtime_error(WrapEglError("Failed to bind egl api"));
@@ -258,6 +259,9 @@ std::string WrapGlError(const std::string& message, GLenum error) {
 GLuint CreateGlTexture(GLenum target, EGLImage image) {
   static PFNGLEGLIMAGETARGETTEXTURE2DOESPROC glEGLImageTargetTexture2DOES{};
   if (glEGLImageTargetTexture2DOES == nullptr) {
+    const GLubyte* gl_ext = glGetString(GL_EXTENSIONS);
+    if (!gl_ext) throw std::runtime_error("Failed to get gl extensions");
+    VerifyExtension(reinterpret_cast<const char*>(gl_ext), "GL_OES_EGL_image");
     glEGLImageTargetTexture2DOES =
         reinterpret_cast<PFNGLEGLIMAGETARGETTEXTURE2DOESPROC>(
             eglGetProcAddress("glEGLImageTargetTexture2DOES"));
