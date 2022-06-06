@@ -44,6 +44,7 @@ void main() {
 
 const auto kFragmentShaderSource = R"(
 uniform sampler2D img_input;
+uniform mediump vec2 img_input_size;
 
 varying mediump vec2 dst_upper_left;
 
@@ -55,7 +56,37 @@ mediump vec3 rgb2yuv(in mediump vec4 rgb) {
   return vec3(y, u + 0.5f, v + 0.5f);
 }
 
-void main() { gl_FragColor = texture2D(img_input, dst_upper_left); }
+void main() {
+  // mburakov: Upper left corner of 4x1 sampling rect.
+  mediump vec2 src_upper_left = vec2(dst_upper_left.x * 4.f, dst_upper_left.y);
+
+  // mburakov: Sampling offsets.
+  mediump float pix_width = 1.f / img_input_size.x;
+  mediump float pix_height = 1.f / img_input_size.y;
+  mediump vec2 src_offset[4];
+  src_offset[0] = vec2(0.f, 0.f);
+  src_offset[1] = vec2(pix_width, 0.f);
+  src_offset[2] = vec2(pix_width * 2.f, 0.f);
+  src_offset[3] = vec2(pix_width * 3.f, 0.f);
+
+  // mburakov: Colors of the 4x1 sampling rect.
+  mediump vec4 rgb[4];
+  rgb[0] = texture2D(img_input, src_upper_left + src_offset[0]);
+  rgb[1] = texture2D(img_input, src_upper_left + src_offset[1]);
+  rgb[2] = texture2D(img_input, src_upper_left + src_offset[2]);
+  rgb[3] = texture2D(img_input, src_upper_left + src_offset[3]);
+
+  // mburakov: Colors after colorspace conversion.
+  mediump vec3 yuv[4];
+  yuv[0] = rgb2yuv(rgb[0]);
+  yuv[1] = rgb2yuv(rgb[1]);
+  yuv[2] = rgb2yuv(rgb[2]);
+  yuv[3] = rgb2yuv(rgb[3]);
+
+  // mburakov: Writing luma plane with single store.
+  // TODO(mburakov): Why such order? Is it little-endian ARGB?
+  gl_FragColor = vec4(yuv[2].r, yuv[1].r, yuv[0].r, yuv[3].r);
+}
 //)";
 
 class FramesconvES20 final : public Framesconv {
@@ -71,6 +102,7 @@ class FramesconvES20 final : public Framesconv {
   GLuint framebuffer_;
   GLuint buffer_object_;
   GLuint program_;
+  GLint img_input_size_;
 };
 
 FramesconvES20::FramesconvES20() {
@@ -111,12 +143,19 @@ FramesconvES20::FramesconvES20() {
   // mburakov: Lookup and set input image uniform.
   GLint img_input = glGetUniformLocation(program, "img_input");
   if (img_input == -1)
-    throw std::runtime_error(WrapGlError("Failed to get uniform location"));
+    throw std::runtime_error(WrapGlError("Failed to get img_input location"));
   glUseProgram(program);
   glUniform1i(img_input, 0);
   glUseProgram(0);
   if (GLenum error = glGetError(); error != GL_NO_ERROR)
     throw std::runtime_error(WrapGlError("Failed to set img_input", error));
+
+  // mburakov: Lookup input image size.
+  img_input_size_ = glGetUniformLocation(program, "img_input_size");
+  if (img_input_size_ == -1) {
+    throw std::runtime_error(
+        WrapGlError("Failed to get img_input_size location"));
+  }
 
   // mburakov: So far so good.
   framebuffer_ = std::exchange(framebuffer, 0);
@@ -147,6 +186,8 @@ void FramesconvES20::Convert(GLuint texture_rgbx, std::size_t width,
   glViewport(0, 0, static_cast<GLsizei>(width), static_cast<GLsizei>(height));
 
   glUseProgram(program_);
+  glUniform2f(img_input_size_, static_cast<GLfloat>(width),
+              static_cast<GLfloat>(height));
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_2D, texture_rgbx);
   glBindBuffer(GL_ARRAY_BUFFER, buffer_object_);
