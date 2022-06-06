@@ -187,7 +187,7 @@ GbmBuffer GbmDevice::CreateGbmBuffer(std::size_t width,
   return {device_.get(), width, height};
 }
 
-EglContext::EglContext() {
+EglContext::EglContext(EGLint major_version, EGLint minor_version) {
   const char* egl_ext = eglQueryString(EGL_NO_DISPLAY, EGL_EXTENSIONS);
   if (!egl_ext) {
     throw std::runtime_error(
@@ -215,8 +215,13 @@ EglContext::EglContext() {
 
   if (!eglBindAPI(EGL_OPENGL_ES_API))
     throw std::runtime_error(WrapEglError("Failed to bind egl api"));
-  static const EGLint kContextAttribs[] = {EGL_CONTEXT_CLIENT_VERSION, 3,
-                                           EGL_NONE};
+  static const EGLint kContextAttribs[] = {
+#define _(...) __VA_ARGS__
+      _(EGL_CONTEXT_MAJOR_VERSION, major_version),
+      _(EGL_CONTEXT_MINOR_VERSION, minor_version),
+      EGL_NONE,
+#undef _
+  };
   context_ = eglCreateContext(display, EGL_NO_CONFIG_KHR, EGL_NO_CONTEXT,
                               kContextAttribs);
   if (context_ == EGL_NO_CONTEXT)
@@ -306,6 +311,37 @@ GLuint CreateGlProgram(const char* source) {
     if (program) glDeleteProgram(program);
   });
   glAttachShader(program, shader);
+  glLinkProgram(program);
+  CheckBuildable<GlProgramTraits>(program);
+  return std::exchange(program, 0);
+}
+
+GLuint CreateGlProgram(const char* source_vertex, const char* source_fragment) {
+  GLuint vertex = glCreateShader(GL_VERTEX_SHADER);
+  if (!vertex)
+    throw std::runtime_error(WrapGlError("Failed to create vertex shader"));
+  Defer deferred_gl_delete_shader_vertex([vertex] { glDeleteShader(vertex); });
+  glShaderSource(vertex, 1, &source_vertex, nullptr);
+  glCompileShader(vertex);
+  CheckBuildable<GlShaderTraits>(vertex);
+
+  GLuint fragment = glCreateShader(GL_FRAGMENT_SHADER);
+  if (!fragment)
+    throw std::runtime_error(WrapGlError("Failed to create fragment shader"));
+  Defer deferred_gl_delete_shader_fragment(
+      [fragment] { glDeleteShader(fragment); });
+  glShaderSource(fragment, 1, &source_fragment, nullptr);
+  glCompileShader(fragment);
+  CheckBuildable<GlShaderTraits>(fragment);
+
+  GLuint program = glCreateProgram();
+  if (!program)
+    throw std::runtime_error(WrapGlError("Failed to create program"));
+  Defer deferred_gl_delete_program([&program] {
+    if (program) glDeleteProgram(program);
+  });
+  glAttachShader(program, vertex);
+  glAttachShader(program, fragment);
   glLinkProgram(program);
   CheckBuildable<GlProgramTraits>(program);
   return std::exchange(program, 0);

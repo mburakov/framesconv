@@ -60,7 +60,7 @@ class GbmDevice {
 
 class EglContext {
  public:
-  EglContext();
+  EglContext(EGLint major_version, EGLint minor_version);
   ~EglContext();
 
   EglContext(const EglContext&) = delete;
@@ -84,5 +84,6 @@ std::string WrapGlError(const std::string& message,
                         GLenum error = glGetError());
 GLuint CreateGlTexture(GLenum target, EGLImage image);
 GLuint CreateGlProgram(const char* source);
+GLuint CreateGlProgram(const char* source_vertex, const char* source_fragment);
 
 #endif  // FRAMESCONV_GPU_H_

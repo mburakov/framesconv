@@ -143,6 +143,7 @@ struct Options {
   const char* input;
   const char* output;
   const char* render_node;
+  bool es20;
 };
 
 Options ParseCommandline(int argc, const char* const argv[]) {
@@ -157,6 +158,11 @@ Options ParseCommandline(int argc, const char* const argv[]) {
   static const auto& check_fname = [](const char* in) {
     return in == "-"sv ? nullptr : in;
   };
+  static const auto& check_implementation = [](const char* in) {
+    if (in == "es31"sv) return false;
+    if (in == "es20"sv) return true;
+    throw std::invalid_argument("Invalid implementation");
+  };
   Options result{};
   result.render_node = "/dev/dri/renderD128";
   for (auto it = argv; it < argv + argc; it++) {
@@ -170,11 +176,13 @@ Options ParseCommandline(int argc, const char* const argv[]) {
       result.output = check_fname(*++it);
     else if (*it == "-r"sv)
       result.render_node = *++it;
+    else if (*it == "-i"sv)
+      result.es20 = check_implementation(*++it);
   }
   if (!result.width || !result.height) {
     throw std::runtime_error(
-        "Usage: framesconv [-i input] -w width "
-        "-h height [-o output] [-r render_node]");
+        "Usage: framesconv [-i input] -w width -h height "
+        "[-o output] [-r render_node] [-i implementation]");
   }
   return result;
 }
@@ -199,7 +207,9 @@ int main(int argc, char* argv[]) try {
       device.CreateGbmBuffer(options.width / 4, options.height * 3 / 2);
 
   // mburakov: Createa and activate surfaceless egl context.
-  EglContext context;
+  const auto& context_version =
+      options.es20 ? std::make_pair(2, 0) : std::make_pair(3, 1);
+  EglContext context(context_version.first, context_version.second);
   context.MakeCurrent();
   Defer deferred_reset_current([&context] { context.ResetCurrent(); });
   EGLDisplay display = context.GetDisplay();
