@@ -128,7 +128,7 @@ void main(void) {
              vec4((yuv[0].gb + yuv[1].gb + yuv[4].gb + yuv[5].gb) / 4.f,
                   (yuv[2].gb + yuv[3].gb + yuv[6].gb + yuv[7].gb) / 4.f));
 }
-)";
+//)";
 
 class FramesconvES31 final : public Framesconv {
  public:
