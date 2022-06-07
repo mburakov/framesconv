@@ -1,7 +1,9 @@
 # framesconv
 
 This is a case study of GPU-accelerated RGB-to-NV12 colorspace conversion by
-means of OpenGL ES 3.1 compute shader. It also showcases following topics:
+means of OpenGL ES 3.1 compute shader. Optional codepath implementing this
+conversion by means of OpenGL ES 2.0 fragment shader is also provided. It also
+showcases following topics:
 * GBM buffers allocation, reading and writing,
 * Surfaceless EGL platform (EGL_MESA_platform_surfaceless),
 * Surfaceless EGL context (EGL_KHR_surfaceless_context),
@@ -31,7 +33,7 @@ Linux-specific extension.
 
 The commandline is
 ```
-framesconv [-i input] -w width -h height [-o output] [-r render_node]
+framesconv [-i input] -w width -h height [-o output] [-r render_node] [-es implementation]
 ```
 
 where
@@ -43,10 +45,12 @@ where
 * `output` is either a) path to a destination image, or b) `-` to write the data
   to the standard output. Destination image is written in raw NV12 format.
 * `render_node` is a path to the DRM render node.
+* `es` is either a) `31` for OpenGL ES 3.1 and compute shader implementation, or
+  b) `20` for OpenGL ES 2.0 and fragment shader implementation.
 
 Default value for `-i` is `-` making it to read from the standard input. Default
-value for `-o` is `-` making it write to the standard output. Default value
-`render_node` is `/dev/dri/renderD128`.
+value for `-o` is `-` making it write to the standard output. Default value for
+`render_node` is `/dev/dri/renderD128`. Default value for `es` is `31`.
 
 ## Usage
 
