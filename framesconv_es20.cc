@@ -48,17 +48,27 @@ uniform mediump vec2 img_input_size;
 
 varying mediump vec2 dst_upper_left;
 
-mediump vec3 rgb2yuv(in mediump vec4 rgb) {
+mediump float rgb2luma(in mediump vec4 rgb) {
   // mburakov: This hardcodes BT.709 full-range.
-  mediump float y = rgb.r * 0.2126f + rgb.g * 0.7152f + rgb.b * 0.0722f;
-  mediump float u = (rgb.b - y) / (2.f * (1.f - 0.0722f));
-  mediump float v = (rgb.r - y) / (2.f * (1.f - 0.2126f));
-  return vec3(y, u + 0.5f, v + 0.5f);
+  // mburakov: Note, that the R and B color components are swapped here to align
+  // with the selected GL_ARGB texture format and RGBA format of the source.
+  return rgb.b * 0.2126f + rgb.g * 0.7152f + rgb.r * 0.0722f;
 }
 
-void main() {
+mediump vec2 rgb2chroma(in mediump vec4 rgb) {
+  // mburakov: This hardcodes BT.709 full-range.
+  // mburakov: Note, that the R and B color components are swapped here to align
+  // with the selected GL_ARGB texture format and RGBA format of the source.
+  mediump float y = rgb.b * 0.2126f + rgb.g * 0.7152f + rgb.r * 0.0722f;
+  mediump float u = (rgb.r - y) / (2.f * (1.f - 0.0722f));
+  mediump float v = (rgb.b - y) / (2.f * (1.f - 0.2126f));
+  return vec2(u + 0.5f, v + 0.5f);
+}
+
+mediump vec4 handle_luma() {
   // mburakov: Upper left corner of 4x1 sampling rect.
-  mediump vec2 src_upper_left = vec2(dst_upper_left.x * 4.f, dst_upper_left.y);
+  mediump vec2 src_upper_left =
+      vec2(dst_upper_left.x * 4.f, dst_upper_left.y / 2.f * 3.f);
 
   // mburakov: Sampling offsets.
   mediump float pix_width = 1.f / img_input_size.x;
@@ -77,15 +87,66 @@ void main() {
   rgb[3] = texture2D(img_input, src_upper_left + src_offset[3]);
 
   // mburakov: Colors after colorspace conversion.
-  mediump vec3 yuv[4];
-  yuv[0] = rgb2yuv(rgb[0]);
-  yuv[1] = rgb2yuv(rgb[1]);
-  yuv[2] = rgb2yuv(rgb[2]);
-  yuv[3] = rgb2yuv(rgb[3]);
+  mediump float luma[4];
+  luma[0] = rgb2luma(rgb[0]);
+  luma[1] = rgb2luma(rgb[1]);
+  luma[2] = rgb2luma(rgb[2]);
+  luma[3] = rgb2luma(rgb[3]);
 
   // mburakov: Writing luma plane with single store.
   // TODO(mburakov): Why such order? Is it little-endian ARGB?
-  gl_FragColor = vec4(yuv[2].r, yuv[1].r, yuv[0].r, yuv[3].r);
+  return vec4(luma[0], luma[1], luma[2], luma[3]).bgra;
+}
+
+mediump vec4 handle_chroma() {
+  // mburakov: Upper left corner of 4x2 sampling rect.
+  mediump vec2 src_upper_left =
+      vec2(dst_upper_left.x * 4.f, (dst_upper_left.y - 2.f / 3.f) * 3.f);
+
+  // mburakov: Sampling offsets.
+  mediump float pix_width = 1.f / img_input_size.x;
+  mediump float pix_height = 1.f / img_input_size.y;
+  mediump vec2 src_offset[8];
+  src_offset[0] = vec2(0.f, 0.f);
+  src_offset[1] = vec2(pix_width, 0.f);
+  src_offset[2] = vec2(pix_width * 2.f, 0.f);
+  src_offset[3] = vec2(pix_width * 3.f, 0.f);
+  src_offset[4] = vec2(0.f, pix_height);
+  src_offset[5] = vec2(pix_width, pix_height);
+  src_offset[6] = vec2(pix_width * 2.f, pix_height);
+  src_offset[7] = vec2(pix_width * 3.f, pix_height);
+
+  // mburakov: Colors of the 4x2 sampling rect.
+  mediump vec4 rgb[8];
+  rgb[0] = texture2D(img_input, src_upper_left + src_offset[0]);
+  rgb[1] = texture2D(img_input, src_upper_left + src_offset[1]);
+  rgb[2] = texture2D(img_input, src_upper_left + src_offset[2]);
+  rgb[3] = texture2D(img_input, src_upper_left + src_offset[3]);
+  rgb[4] = texture2D(img_input, src_upper_left + src_offset[4]);
+  rgb[5] = texture2D(img_input, src_upper_left + src_offset[5]);
+  rgb[6] = texture2D(img_input, src_upper_left + src_offset[6]);
+  rgb[7] = texture2D(img_input, src_upper_left + src_offset[7]);
+
+  // mburakov: Colors after colorspace conversion.
+  mediump vec2 chroma[8];
+  chroma[0] = rgb2chroma(rgb[0]);
+  chroma[1] = rgb2chroma(rgb[1]);
+  chroma[2] = rgb2chroma(rgb[2]);
+  chroma[3] = rgb2chroma(rgb[3]);
+  chroma[4] = rgb2chroma(rgb[4]);
+  chroma[5] = rgb2chroma(rgb[5]);
+  chroma[6] = rgb2chroma(rgb[6]);
+  chroma[7] = rgb2chroma(rgb[7]);
+
+  // mburakov: Writing chroma plane with single store.
+  // TODO(mburakov): Why such order? Is it little-endian ARGB?
+  return vec4((chroma[0] + chroma[1] + chroma[4] + chroma[5]) / 4.f,
+              (chroma[2] + chroma[3] + chroma[6] + chroma[7]) / 4.f).bgra;
+}
+
+void main() {
+  gl_FragColor =
+      (dst_upper_left.y < 2.f / 3.f) ? handle_luma() : handle_chroma();
 }
 //)";
 
@@ -183,7 +244,8 @@ void FramesconvES20::Convert(GLuint texture_rgbx, std::size_t width,
     throw std::runtime_error(message);
   }
 
-  glViewport(0, 0, static_cast<GLsizei>(width), static_cast<GLsizei>(height));
+  glViewport(0, 0, static_cast<GLsizei>(width),
+             static_cast<GLsizei>(height * 3 / 2));
 
   glUseProgram(program_);
   glUniform2f(img_input_size_, static_cast<GLfloat>(width),
